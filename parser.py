@@ -15,32 +15,37 @@ def extract_receipt_data(text: str) -> dict:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     full_text = " ".join(lines)
 
-    # ---- 1. Structured Field Line Extraction ----
+    # ---- 1. Handle structured line with multiple fields ----
     for i in range(len(lines) - 1):
         if ("invoice number" in lines[i].lower() and
-            "date" in lines[i].lower()):
+            "date" in lines[i].lower() and
+            "due" in lines[i].lower()):
 
             values = re.findall(r"(\d{2}/\d{2}/\d{2,4}|\d+|\$[\d,]+\.\d{2})", lines[i+1])
-            if len(values) >= 2:
+            if len(values) >= 4:
                 try:
                     data["invoice_number"] = re.sub(r"[^\d]", "", values[0])
-                    dt = datetime.strptime(values[1], "%d/%m/%Y")
+                    dt = datetime.strptime(values[1], "%m/%d/%y")
                     data["invoice_date"] = dt.strftime("%Y-%m-%d")
+                    # Optional: Add due date field if needed
+                    # due_dt = datetime.strptime(values[2], "%m/%d/%y")
+                    # data["invoice_due_date"] = due_dt.strftime("%Y-%m-%d")
+                    data["total_amount"] = float(values[3].replace("$", "").replace(",", ""))
                 except:
                     pass
 
-    # ---- 2. Backup Invoice Number ----
+    # ---- 2. Backup invoice number ----
     if data["invoice_number"] == "NA":
         match = re.search(r"(Invoice|Bill|Receipt)[^\d]{0,10}(\d{3,})", full_text, re.IGNORECASE)
         if match:
             data["invoice_number"] = match.group(2)
 
-    # ---- 3. Backup Invoice Date ----
+    # ---- 3. Backup invoice date formats ----
     if data["invoice_date"] == "NA":
         date_patterns = [
-            r"\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12][0-9]|3[01])[/-](\d{2,4})\b",  # MM/DD/YYYY
-            r"\b(0?[1-9]|[12][0-9]|3[01])[/-](0?[1-9]|1[0-2])[/-](\d{2,4})\b",  # DD/MM/YYYY
-            r"\b\d{4}[/-](0?[1-9]|1[0-2])[/-](0?[1-9]|[12][0-9]|3[01])\b"       # YYYY-MM-DD
+            r"\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12][0-9]|3[01])[/-](\d{2,4})\b",
+            r"\b(0?[1-9]|[12][0-9]|3[01])[/-](0?[1-9]|1[0-2])[/-](\d{2,4})\b",
+            r"\b\d{4}[/-](0?[1-9]|1[0-2])[/-](0?[1-9]|[12][0-9]|3[01])\b"
         ]
         for pattern in date_patterns:
             match = re.search(pattern, full_text)
@@ -52,36 +57,20 @@ def extract_receipt_data(text: str) -> dict:
                         break
                     except:
                         continue
+                else:
+                    data["invoice_date"] = match.group(0)
                 break
 
-    # ---- 4. Vendor Name Extraction ----
-    vendor_keywords = r"(hospital|dmart|store|center|mart|medical|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?|supermarket|bazaar|pharmacy|clinic|institute|solutions|services|technologies|systems|telecom|broadband)"
-    company_indicators = r"(pvt|private|ltd|limited|inc|llp|corp|corporation|technologies|solutions|services|company|enterprise|industries|office|your company|group)"
+        # ---- 4. Vendor Name ----
+    vendor_keywords = r"(hospital|dmart|store|center|mart|medical|clinic|pharmacy|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?|technologies|solutions|systems|ltd|pvt|private|limited|corporation|company|institute|university|college|enterprise|office|your\scompany\sname)"
 
-    # Primary: Uppercase header
-    for line in lines[:10]:
-        if line.strip().isupper() and len(line.strip()) > 4 and len(line.strip().split()) <= 6:
-            data["vendor_name"] = line.strip().title()
+    for line in reversed(lines[-12:]):
+        line_clean = re.sub(r"[^\w\s&]", "", line).strip()
+        if re.search(vendor_keywords, line_clean, re.IGNORECASE):
+            data["vendor_name"] = line.strip()
             break
 
-    # Backup 1: Keyword match (top or bottom)
-    if data["vendor_name"] == "NA":
-        for line in reversed(lines[-10:] + lines[:10]):
-            if re.search(vendor_keywords, line, re.IGNORECASE):
-                data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip().title()
-                break
-
-    # Backup 2: After "Billed To" / "Invoice To"
-    if data["vendor_name"] == "NA":
-        for idx, line in enumerate(lines):
-            if "billed to" in line.lower() or "invoice to" in line.lower():
-                if idx + 1 < len(lines):
-                    next_line = lines[idx + 1]
-                    if re.search(company_indicators, next_line, re.IGNORECASE):
-                        data["vendor_name"] = re.sub(r"[^\w\s&]", "", next_line).strip().title()
-                        break
-
-    # Backup 3: Email / Domain inference
+    # Backup: Extract from domain/email/website
     if data["vendor_name"] == "NA":
         for line in lines:
             if ".com" in line or "@" in line or "www." in line:
@@ -92,9 +81,6 @@ def extract_receipt_data(text: str) -> dict:
                     data["vendor_name"] = vendor_guess.capitalize() + " (inferred)"
                     break
 
-    if data["vendor_name"] == "NA":
-        data["vendor_name"] = "Unknown"
-
     # ---- 5. Tax Amount ----
     tax_amt_match = re.search(r"\b(Tax|GST|VAT)[\s\S]{0,15}?\$?([0-9.,]{2,})", full_text, re.IGNORECASE)
     if tax_amt_match:
@@ -103,7 +89,7 @@ def extract_receipt_data(text: str) -> dict:
         except:
             pass
 
-    # ---- 6. Subtotal ----
+    # ---- 6. Subtotal Amount ----
     sub_total_match = re.search(r"\b(Sub[- ]?Total)[\s:$]*\$?([0-9.,]+)", full_text, re.IGNORECASE)
     if sub_total_match:
         try:
@@ -111,7 +97,7 @@ def extract_receipt_data(text: str) -> dict:
         except:
             pass
 
-    # ---- 7. Total ----
+    # ---- 7. Grand Total (if not already filled) ----
     if data["total_amount"] == 0.0:
         grand_total_match = re.search(r"\b(Total Amount|Grand Total|Total)[\s:$]*\$?([0-9.,]+)", full_text, re.IGNORECASE)
         if grand_total_match:
