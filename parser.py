@@ -61,14 +61,16 @@ def extract_receipt_data(text: str) -> dict:
                     data["invoice_date"] = match.group(0)
                 break
 
-    # ---- 4. Vendor Name ----
-    vendor_keywords = r"(hospital|dmart|store|center|mart|medical|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?)"
-    for line in reversed(lines[-10:]):
-        if re.search(vendor_keywords, line, re.IGNORECASE):
-            data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip()
+        # ---- 4. Vendor Name ----
+    vendor_keywords = r"(hospital|dmart|store|center|mart|medical|clinic|pharmacy|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?|technologies|solutions|systems|ltd|pvt|private|limited|corporation|company|institute|university|college|enterprise|office|your\scompany\sname)"
+
+    for line in reversed(lines[-12:]):
+        line_clean = re.sub(r"[^\w\s&]", "", line).strip()
+        if re.search(vendor_keywords, line_clean, re.IGNORECASE):
+            data["vendor_name"] = line.strip()
             break
 
-    # Backup: Try to extract from email/website domain
+    # Backup: Extract from domain/email/website
     if data["vendor_name"] == "NA":
         for line in lines:
             if ".com" in line or "@" in line or "www." in line:
