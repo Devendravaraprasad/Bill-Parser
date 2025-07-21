@@ -45,8 +45,7 @@
   * Context keywords (e.g., hospital, D-Mart, medical)
   * Domain inference (from email or website lines)
 * Date formats handled flexibly with multiple regex patterns.
-* OCR engine is modular—can swap between pytesseract and PaddleOCR.
-
+* OCR engine is modular—can swap between pytesseract .
 **Limitations:**
 
 * OCR quality depends on image clarity.
