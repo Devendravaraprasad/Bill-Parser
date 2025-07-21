@@ -62,20 +62,34 @@ def extract_receipt_data(text: str) -> dict:
                 break
 
    # ---- 4. Vendor Name ----
+    # ---- 4. Vendor Name ----
     vendor_keywords = r"(hospital|dmart|store|center|mart|medical|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?|supermarket|bazaar|pharmacy|clinic|institute|solutions|services|technologies|systems|telecom|broadband)"
-    for line in reversed(lines[:12]):  # check top portion too
-        if re.search(vendor_keywords, line, re.IGNORECASE):
-            data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip()
+    company_indicators = r"(pvt|private|ltd|limited|inc|llp|corp|corporation|technologies|solutions|services|company|enterprise|industries)"
+
+    # Primary: Check top 10 lines for uppercase title lines
+    for line in lines[:10]:
+        if line.strip().isupper() and len(line.strip()) > 4 and len(line.strip().split()) <= 6:
+            data["vendor_name"] = line.strip().title()
             break
 
-    # Fallback 1: Look for company names in uppercase (often at top of bill)
+    # Backup 1: Check for known keywords (top or bottom lines)
     if data["vendor_name"] == "NA":
-        for line in lines[:10]:
-            if line.strip().isupper() and len(line.strip()) > 4 and len(line.strip().split()) < 6:
-                data["vendor_name"] = line.strip().title()
+        for line in reversed(lines[-10:] + lines[:10]):
+            if re.search(vendor_keywords, line, re.IGNORECASE):
+                data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip().title()
                 break
 
-    # Fallback 2: Try from domain in email or website
+    # Backup 2: Check for line after "Billed To" / "Invoice To"
+    if data["vendor_name"] == "NA":
+        for idx, line in enumerate(lines):
+            if "billed to" in line.lower() or "invoice to" in line.lower():
+                if idx + 1 < len(lines):
+                    possible_vendor = lines[idx + 1].strip()
+                    if re.search(company_indicators, possible_vendor, re.IGNORECASE):
+                        data["vendor_name"] = re.sub(r"[^\w\s&]", "", possible_vendor).strip().title()
+                        break
+
+    # Backup 3: Domain-based inference (email / website)
     if data["vendor_name"] == "NA":
         for line in lines:
             if ".com" in line or "@" in line or "www." in line:
@@ -86,16 +100,10 @@ def extract_receipt_data(text: str) -> dict:
                     data["vendor_name"] = vendor_guess.capitalize() + " (inferred)"
                     break
 
-    # Fallback 3: Look for patterns like 'Your Company Name' or 'Office Name'
-    if data["vendor_name"] == "NA":
-        for line in lines:
-            if "company" in line.lower() or "office" in line.lower() or "corporation" in line.lower():
-                data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip()
-                break
-
     # Final fallback
     if data["vendor_name"] == "NA":
         data["vendor_name"] = "Unknown"
+
 
 
     # ---- 5. Tax Amount ----
