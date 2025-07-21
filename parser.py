@@ -61,16 +61,21 @@ def extract_receipt_data(text: str) -> dict:
                     data["invoice_date"] = match.group(0)
                 break
 
-        # ---- 4. Vendor Name ----
-    vendor_keywords = r"(hospital|dmart|store|center|mart|medical|clinic|pharmacy|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?|technologies|solutions|systems|ltd|pvt|private|limited|corporation|company|institute|university|college|enterprise|office|your\scompany\sname)"
-
-    for line in reversed(lines[-12:]):
-        line_clean = re.sub(r"[^\w\s&]", "", line).strip()
-        if re.search(vendor_keywords, line_clean, re.IGNORECASE):
-            data["vendor_name"] = line.strip()
+   # ---- 4. Vendor Name ----
+    vendor_keywords = r"(hospital|dmart|store|center|mart|medical|electricity|power|board|energy|bescom|mseb|tneb|tangedco|bills?|supermarket|bazaar|pharmacy|clinic|institute|solutions|services|technologies|systems|telecom|broadband)"
+    for line in reversed(lines[:12]):  # check top portion too
+        if re.search(vendor_keywords, line, re.IGNORECASE):
+            data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip()
             break
 
-    # Backup: Extract from domain/email/website
+    # Fallback 1: Look for company names in uppercase (often at top of bill)
+    if data["vendor_name"] == "NA":
+        for line in lines[:10]:
+            if line.strip().isupper() and len(line.strip()) > 4 and len(line.strip().split()) < 6:
+                data["vendor_name"] = line.strip().title()
+                break
+
+    # Fallback 2: Try from domain in email or website
     if data["vendor_name"] == "NA":
         for line in lines:
             if ".com" in line or "@" in line or "www." in line:
@@ -80,6 +85,18 @@ def extract_receipt_data(text: str) -> dict:
                     vendor_guess = domain.split(".")[0]
                     data["vendor_name"] = vendor_guess.capitalize() + " (inferred)"
                     break
+
+    # Fallback 3: Look for patterns like 'Your Company Name' or 'Office Name'
+    if data["vendor_name"] == "NA":
+        for line in lines:
+            if "company" in line.lower() or "office" in line.lower() or "corporation" in line.lower():
+                data["vendor_name"] = re.sub(r"[^\w\s&]", "", line).strip()
+                break
+
+    # Final fallback
+    if data["vendor_name"] == "NA":
+        data["vendor_name"] = "Unknown"
+
 
     # ---- 5. Tax Amount ----
     tax_amt_match = re.search(r"\b(Tax|GST|VAT)[\s\S]{0,15}?\$?([0-9.,]{2,})", full_text, re.IGNORECASE)
