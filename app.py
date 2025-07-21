@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import platform
 
+
 from parser import extract_receipt_data
 from db import init_db, insert_receipt, fetch_all_receipts
 
@@ -33,12 +34,6 @@ COLUMNS = [
 ]
 
 
-import cv2
-import numpy as np
-from PIL import Image
-import pytesseract
-import pandas as pd
-import streamlit as st
 
 def enhance_image(pil_img):
     # Convert to OpenCV grayscale
@@ -60,42 +55,58 @@ def enhance_image(pil_img):
 
 # --- Upload Tab ---
 with upload_tab:
-    uploaded_file = st.file_uploader("📤 Upload receipt image", type=["png", "jpg", "jpeg"])
+    st.markdown("## 📤 Upload Receipt Image", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .uploaded-image, .enhanced-image {
+        border: 1px solid #ddd;
+        padding: 5px;
+        border-radius: 10px;
+        margin-top: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    uploaded_file = st.file_uploader("Upload your receipt (.png, .jpg, .jpeg)", type=["png", "jpg", "jpeg"])
 
     if uploaded_file:
-        pil_img = Image.open(uploaded_file)
-
-        # Display original
-        st.image(pil_img, caption="🖼️ Uploaded Image", use_container_width=False, width=600)
-
         try:
+            pil_img = Image.open(uploaded_file)
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### 🖼️ Original Image")
+                st.image(pil_img, use_container_width=True, caption="Uploaded")
+
             # Step 1: Enhance
             enhanced_img = enhance_image(pil_img)
 
-            # Step 2: Show enhanced image for reference
-            st.image(enhanced_img, caption="✨ Enhanced for OCR", use_container_width=False, width=600, channels="GRAY")
+            with col2:
+                st.markdown("#### ✨ Enhanced for OCR")
+                st.image(enhanced_img, use_container_width=True, caption="Enhanced (Grayscale)", channels="GRAY")
 
-            # Step 3: OCR on enhanced image
-            text = pytesseract.image_to_string(enhanced_img, config="--psm 6")
+            # Step 2: OCR on enhanced image
+            st.markdown("---")
+            st.markdown("### 📄 Extracted Raw OCR Text")
+            with st.expander("🔍 View OCR Text"):
+                text = pytesseract.image_to_string(enhanced_img, config="--psm 6")
+                st.code(text, language="text")
 
-            st.subheader("📄 Raw OCR Text")
-            st.text(text)
-
-            # Step 4: Extract structured data
+            # Step 3: Extract structured data
+            st.markdown("### 📦 Structured Receipt Data")
             structured_data = extract_receipt_data(text)
-
-            st.subheader("📦 Structured Data")
             st.json(structured_data)
 
-            # Step 5: Insert to DB if valid
+            # Step 4: Store to DB
             if "Error" not in structured_data:
                 insert_receipt(structured_data)
-                st.success("✅ Receipt stored successfully.")
+                st.success("✅ Receipt stored successfully!")
             else:
-                st.error(structured_data["Error"])
+                st.error(f"❌ {structured_data['Error']}")
 
         except Exception as e:
-            st.error(f"❌ OCR failed: {e}")
+            st.error(f"🚫 Failed to process receipt: {e}")
 
     # --- Show stored receipts ---
     st.markdown("---")
