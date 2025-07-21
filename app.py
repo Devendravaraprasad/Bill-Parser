@@ -4,6 +4,7 @@ import pytesseract
 import cv2
 import numpy as np
 import pandas as pd
+import platform
 
 from parser import extract_receipt_data
 from db import init_db, insert_receipt, fetch_all_receipts
@@ -11,7 +12,8 @@ from db import init_db, insert_receipt, fetch_all_receipts
 # Tesseract path (adjust as needed)
 import pytesseract
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Users\devevara\OneDrive - Magna\DevaProjects\8-byte\Tesseract-OCR\tesseract.exe'
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Users\devevara\OneDrive - Magna\DevaProjects\8-byte\Tesseract-OCR\tesseract.exe'
 
 
 # Streamlit setup
