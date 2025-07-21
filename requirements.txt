@@ -3,3 +3,4 @@ pytesseract
 pillow
 opencv-python-headless
 matplotlib
+pandas
