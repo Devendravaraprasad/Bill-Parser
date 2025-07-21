@@ -4,4 +4,5 @@ pillow
 opencv-python-headless
 matplotlib
 pandas
-platform
+numpy
+paddleocr
