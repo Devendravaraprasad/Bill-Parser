@@ -9,7 +9,10 @@ from parser import extract_receipt_data
 from db import init_db, insert_receipt, fetch_all_receipts
 
 # Tesseract path (adjust as needed)
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\devevara\OneDrive - Magna\DevaProjects\8-byte\Tesseract-OCR\\tesseract.exe"
+import pytesseract
+
+pytesseract.pytesseract.tesseract_cmd = r'C:\Users\devevara\OneDrive - Magna\DevaProjects\8-byte\Tesseract-OCR\tesseract.exe'
+
 
 # Streamlit setup
 st.set_page_config(page_title="Receipt OCR App", layout="wide")
